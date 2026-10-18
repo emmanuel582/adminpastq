@@ -20,7 +20,9 @@ Only set `VITE_API_URL` if changing the API hostname. Both an origin and a URL e
 
 ## Sign in and live data
 
-Sign in with the existing PastQ administrator email and password. The API verifies the Supabase session and server-side admin allowlist before exposing any admin data. The service-role key stays on the VPS; it is never shipped in this repository or the browser bundle.
+Choose **Continue with Google** and use the Google account associated with your existing PastQ administrator account. No password form is shown. Google sign-in uses Supabase PKCE in the same browser tab; the API verifies the session and server-side admin allowlist before exposing any admin data. Public Supabase client configuration comes from `/api/auth/config`, so no additional Vercel environment variables are required. The service-role key stays on the VPS.
+
+In Supabase Authentication → URL Configuration, allow the admin callback `https://adminpastq.vercel.app/?admin_auth=google` and the actual admin deployment origin if different. For local development allow `http://127.0.0.1:5174/?admin_auth=google` and `http://localhost:5174/?admin_auth=google`. Keep existing student app redirects. Google remains enabled through the existing Supabase Google provider.
 
 The VPS needs its existing `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and unchanged `SESSION_OWNER_HMAC_SECRET`, plus `SUPABASE_SERVICE_ROLE_KEY` and the administrator's Supabase UUID in `ADMIN_USER_IDS`. Add the actual Vercel origin to `FRONTEND_URL` without removing the student app's origins.
 

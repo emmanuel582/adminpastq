@@ -35,10 +35,23 @@ index dffa4c5..ecc92a8 100644
    console.log(`[vision] OPENROUTER_API_KEY=${openRouterKeyFingerprint()}`);
  
 diff --git a/server/routes/auth.js b/server/routes/auth.js
-index fc17d2a..6f5a784 100644
+index fc17d2a..9a5eff6 100644
 --- a/server/routes/auth.js
 +++ b/server/routes/auth.js
-@@ -85,4 +85,15 @@ router.post('/logout', async (req, res) => {
+@@ -27,6 +27,12 @@ function requireConfiguredSupabase(res) {
+   return false;
+ }
+ 
++// Only public client configuration; the service-role key must never leave the VPS.
++router.get('/config', (_req, res) => {
++  if (!requireConfiguredSupabase(res)) return;
++  return res.json({ supabaseUrl, supabaseAnonKey });
++});
++
+ router.post('/signup', async (req, res) => {
+   try {
+     if (!requireConfiguredSupabase(res)) return;
+@@ -85,4 +91,15 @@ router.post('/logout', async (req, res) => {
    }
  });
  
