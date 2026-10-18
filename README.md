@@ -2,6 +2,16 @@
 
 Separate React + Vite admin app for `emmanuel582/adminpastq`, ready to host on Vercel. It uses real Supabase accounts/student data and real VPS uploads/questions. There is no demo mode, sample dataset, or mock API fallback.
 
+## Student insights and notifications
+
+Users & Signups shows the actual saved school/exam, undergraduate choice, onboarding stage, and profile. Search and conditions cover all accounts across pages. Select one or several accounts to open the notification composer. Account details include study goals, learning-record counts, and links to every supported student dataset.
+
+The activity chart reads signup dates from Supabase Auth (including unconfirmed accounts), uploads from the VPS, and completed sessions from the student app's saved Supabase exam history (`exam_sessions`). Device-only and pending offline results appear after synchronization. It refreshes every 15 seconds, supports 7/14/30/90-day ranges, and provides keyboard-accessible day values and a complete data table. Days are UTC; today's totals are partial. Failed data sources are marked unavailable.
+
+Notifications support all accounts, selected accounts, or the intersection of school, exam, student type, account status, onboarding, signup dates, and days since last sign-in. Review freezes the recipient list for 15 minutes. Sending creates an inbox message for each recipient, with optional browser push to enabled, connected devices. Upload JPEG/PNG/WebP images up to 5 MB; the API validates and re-encodes them as WebP. Browser support determines whether a push shows its image. This feature sends in-app and browser notifications; it does not send email or SMS.
+
+Campaigns, recipient snapshots, inbox reads, and device delivery results persist on the VPS. Duplicate send requests do not duplicate inbox messages or restart push delivery. Interrupted push results are reported as unknown rather than automatically sending again. The student frontend provides Preferences → Notifications and updates the existing push worker to display uploaded campaign artwork. No notification is sent merely by previewing it.
+
 ## Hosting on Vercel
 
 Import `emmanuel582/adminpastq` with the repository root as the Root Directory. `vercel.json` supplies Vite, `npm ci`, `npm run build`, and `dist`. Production connects to `https://76.13.110.6.nip.io/api` by default. No browser Supabase service key is needed. Subsequent pushes to the connected production branch trigger Vercel deployments.

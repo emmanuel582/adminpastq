@@ -1,9 +1,9 @@
 # VPS integration
 
-This directory contains an overlay for the existing PastQ API, not a second standalone server.
+This is an overlay for the existing PastQ API. The live API has the student directory, UTC analytics, notification composer endpoints, persistent campaigns, image storage, private student inboxes, and a browser push queue installed.
 
-The admin router and category store are new files. The integration patch adds the router mount, session refresh, action auditing, a page-store shutdown helper for tests, and safe preservation of sibling collections during manual reclassification.
+The new files are routes/admin.js and services/admin/{store,students,notifications}.js. The integration.patch contains changes to existing API files, including the authenticated inbox in reminders routes, the campaign scheduler, and the owner-key helper. Review against the current VPS source before applying. Patch paths are relative to the full PastQ repository; inside a server root use git apply --check -p2 integration.patch. Preserve the production environment, Supabase keys, owner HMAC secret, and persistent data volume. Rebuild the existing Docker service after installing the matching source.
 
-Apply only after comparing with the current VPS source and saving a rollback backup. The patch paths are relative to the full PastQ repository; inside the existing server directory they can be checked using `git apply --check -p2 integration.patch`. Copy `routes/admin.js` and `services/admin/store.js` into matching directories, then apply the reviewed patch and rebuild the existing Docker service. Preserve the production environment and persistent data volume.
+Requires the existing sharp, multer, web-push, Supabase client, and Node SQLite dependencies. No additional database migration is required: campaign records, inbox messages, and image files persist under DATA_DIR on the VPS. Public image URLs expose only intentionally uploaded raster notification artwork under opaque IDs. Account and inbox data remain authenticated. Student frontend inbox and worker updates are published separately to emmanuel582/pastqfrontend.
 
-The VPS keeps the Supabase service key and admin allowlist. No secrets are included here. The current live service must be updated before these admin endpoints and category moves can work.
+Keep rollback source and Docker image backups before deployment. The server tests in the main PastQ workspace cover roles, targeting, chart boundaries, image normalization, account isolation, and duplicate-send protection. No credentials or student records are included here.

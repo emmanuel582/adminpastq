@@ -1,5 +1,5 @@
 diff --git a/server/index.js b/server/index.js
-index dffa4c5..228e7d8 100644
+index dffa4c5..ecc92a8 100644
 --- a/server/index.js
 +++ b/server/index.js
 @@ -2,6 +2,7 @@ import 'dotenv/config';
@@ -10,7 +10,15 @@ index dffa4c5..228e7d8 100644
  import visionRoutes from './routes/vision.js';
  import { resumeInterruptedSessions } from './services/vision/processor.js';
  import libraryRoutes from './routes/library.js';
-@@ -72,6 +73,7 @@ app.get('/', (_req, res) => {
+@@ -10,6 +11,7 @@ import recommendationRoutes from './routes/recommendations.js';
+ import reminderRoutes from './routes/reminders.js';
+ import discoverRoutes from './routes/discover.js';
+ import { startReminderScheduler } from './services/reminders/delivery.js';
++import { startCampaignScheduler } from './services/admin/notifications.js';
+ import fs from 'fs';
+ import { getDataRoot } from './services/vision/store.js';
+ import { requestContext, securityHeaders } from './services/http/security.js';
+@@ -72,6 +74,7 @@ app.get('/', (_req, res) => {
  });
  
  app.use('/api/auth', authRoutes);
@@ -18,6 +26,14 @@ index dffa4c5..228e7d8 100644
  
  // Give upload routes extra time — mobile bulk-uploads can be large
  app.use('/api/vision', (req, _res, next) => {
+@@ -128,6 +131,7 @@ app.listen(PORT, listenAddress, () => {
+   // Continue any extraction that was interrupted by a restart or crash.
+   resumeInterruptedSessions();
+   startReminderScheduler();
++  startCampaignScheduler();
+   console.log(`[vision] model=${process.env.VISION_MODEL || 'meta/muse-spark-1.3-contributor'} (capabilities checked per session)`);
+   console.log(`[vision] OPENROUTER_API_KEY=${openRouterKeyFingerprint()}`);
+ 
 diff --git a/server/routes/auth.js b/server/routes/auth.js
 index fc17d2a..6f5a784 100644
 --- a/server/routes/auth.js
@@ -38,6 +54,27 @@ index fc17d2a..6f5a784 100644
 +});
 +
  export default router;
+diff --git a/server/routes/reminders.js b/server/routes/reminders.js
+index fa3c9b0..f11fd3e 100644
+--- a/server/routes/reminders.js
++++ b/server/routes/reminders.js
+@@ -4,8 +4,16 @@ import { rateLimit } from '../services/http/security.js';
+ import { validateSettings, validateActivity, planReminder } from '../services/reminders/planner.js';
+ import { pushConfiguration, validateSubscription, sendTestReminder } from '../services/reminders/delivery.js';
+ import * as store from '../services/reminders/store.js';
++import * as notifications from '../services/admin/notifications.js';
+ const router = Router();
++router.get('/images/:id',rateLimit({limit:180,keyPrefix:'notification-images'}),(req,res,next)=>{
++  const filename=notifications.imagePath(req.params.id);
++  if(!filename)return res.status(404).json({error:'Image not found.'});
++  res.type('webp').set('Cache-Control','public, max-age=86400').set('Cross-Origin-Resource-Policy','cross-origin').sendFile(filename,error=>{if(error)next(error);});
++});
+ router.use(requireAuthenticatedUser, rateLimit({ limit: 40, keyPrefix: 'reminders' }), (_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
++router.get('/inbox',(req,res)=>{const offset=Math.max(0,parseInt(req.query.offset)||0);res.json(notifications.inbox(req.auth.user.id,offset,20));});
++router.post('/inbox/:id/read',(req,res,next)=>{try{notifications.markRead(req.auth.user.id,req.params.id);res.json({ok:true});}catch(error){if(error.status)return res.status(error.status).json({error:error.message});next(error);}});
+ function snapshot(owner, ownerId) { const settings = store.readSettings(owner), config = pushConfiguration(), activity = store.readActivity(owner); return { ownerId, settings, activityCount: activity.length, push: { configured: Boolean(config), publicKey: config?.publicKey || null, devices: store.subscriptions(owner).map(item => item.id) }, preview: planReminder(settings, activity), lastDelivery: store.lastDelivery(owner) }; }
+ router.get('/', (req, res, next) => { try { res.json(snapshot(req.auth.ownerKey, req.auth.user.id)); } catch (error) { next(error); } });
+ router.put('/', (req, res, next) => {
 diff --git a/server/routes/vision.js b/server/routes/vision.js
 index 123f8ce..74cccb6 100644
 --- a/server/routes/vision.js
@@ -90,6 +127,19 @@ index 123f8ce..74cccb6 100644
    res.json({ ...publicSession(session), requeued });
  });
  
+diff --git a/server/services/auth/middleware.js b/server/services/auth/middleware.js
+index d9ba9c8..b7acbe0 100644
+--- a/server/services/auth/middleware.js
++++ b/server/services/auth/middleware.js
+@@ -39,7 +39,7 @@ function userIsAdmin(user) {
+   return user.app_metadata?.role === 'admin' || appRoles.includes('admin');
+ }
+ 
+-function sessionOwnerKey(userId) {
++export function sessionOwnerKey(userId) {
+   if (!ownerSecret) return null;
+   return crypto.createHmac('sha256', ownerSecret).update(userId).digest('base64url');
+ }
 diff --git a/server/services/library/store.js b/server/services/library/store.js
 index 18cb7f8..f39b63e 100644
 --- a/server/services/library/store.js
@@ -103,6 +153,23 @@ index 18cb7f8..f39b63e 100644
      groupKey: slugify(input.organization?.id || name),
      organization: {
        id: slugify(input.organization?.id || name), name,
+diff --git a/server/services/reminders/delivery.js b/server/services/reminders/delivery.js
+index 4c21d4b..b471bff 100644
+--- a/server/services/reminders/delivery.js
++++ b/server/services/reminders/delivery.js
+@@ -20,10 +20,10 @@ export function validateSubscription(input) {
+   try { crypto.ECDH.convertKey(Buffer.from(input.keys.p256dh, 'base64url'), 'prime256v1'); } catch { fail(); }
+   return { endpoint: url.href, expirationTime: null, keys: { p256dh: input.keys.p256dh, auth: input.keys.auth } };
+ }
+-export async function sendPush(subscription, payload) {
++export async function sendPush(subscription, payload, { topic = 'pastq-study' } = {}) {
+   const vapidDetails = pushConfiguration();
+   if (!vapidDetails) throw new Error('Push delivery is not configured.');
+-  return webpush.sendNotification(subscription, JSON.stringify(payload), { vapidDetails, TTL: 3600, urgency: 'normal', timeout: 10000, topic: 'pastq-study' });
++  return webpush.sendNotification(subscription, JSON.stringify(payload), { vapidDetails, TTL: 3600, urgency: 'normal', timeout: 10000, topic });
+ }
+ export async function sendTestReminder(owner, endpoint, send = sendPush) {
+   if (typeof endpoint !== 'string' || endpoint.length > 2048) throw Object.assign(new Error('Connect this device before testing reminders.'), { status: 400 });
 diff --git a/server/services/vision/pageStore.js b/server/services/vision/pageStore.js
 index 2dd4095..354a53b 100644
 --- a/server/services/vision/pageStore.js

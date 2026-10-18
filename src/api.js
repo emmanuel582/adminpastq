@@ -1,6 +1,7 @@
 
 const configuredBase = (import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'https://76.13.110.6.nip.io/api' : '/api')).replace(/\/$/, '');
 const BASE = configuredBase.endsWith('/api') ? configuredBase : `${configuredBase}/api`;
+export const notificationImageUrl = id => id ? `${BASE}/reminders/images/${encodeURIComponent(id)}` : '';
 let session;
 try { session = JSON.parse(sessionStorage.getItem('pastq-admin-session') || 'null'); } catch { sessionStorage.removeItem('pastq-admin-session'); }
 export function setSession(value) { session = value; value ? sessionStorage.setItem('pastq-admin-session', JSON.stringify(value)) : sessionStorage.removeItem('pastq-admin-session'); }

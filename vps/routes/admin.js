@@ -12,6 +12,10 @@ import { reviewedMaterial, reviewQuestions } from '../services/vision/reviewedMa
 import { saveReviewedMaterial } from '../services/vision/reviewedMaterialStore.js';
 import { schedulerStats } from '../services/vision/scheduler.js';
 import * as store from '../services/admin/store.js';
+import { allAccounts, accountView, directory, validateFilters, matchesStudent, audience, buildTrend, clearAccountCache } from '../services/admin/students.js';
+import * as notifications from '../services/admin/notifications.js';
+import multer from 'multer';
+import { pushConfiguration } from '../services/reminders/delivery.js';
 
 const router = Router();
 router.use(requireAuthenticatedUser, requireAdmin, rateLimit({ limit: 240, keyPrefix: 'admin' }));
@@ -34,6 +38,7 @@ export const DATA_TABLES = {
   users: 'created_at', student_preferences: 'updated_at', practice_sessions: 'started_at', question_attempts: 'created_at',
   student_topic_mastery: 'updated_at', recommendation_impressions: 'created_at', learning_events: 'occurred_at',
   exam_sessions: 'created_at', notification_preferences: 'updated_at', notifications: 'sent_at', push_subscriptions: 'created_at',
+  admin_notification_campaigns:'sent_at',admin_notification_inbox:'sent_at',
 };
 function uploadSummary(session, assignments = {}) {
   return { id: session.id, name: session.name, status: session.status, createdAt: session.createdAt, updatedAt: session.updatedAt,
@@ -55,34 +60,36 @@ function filteredPage(req, items) {
   return { items: filtered.slice(offset, offset + limit), total: filtered.length, offset, limit };
 }
 router.get('/me', (req, res) => res.json({ user: { id: req.auth.user.id, email: req.auth.user.email, name: req.auth.user.user_metadata?.full_name }, admin: true }));
-router.get('/overview', asyncRoute(async (_req, res) => {
+router.get('/overview', asyncRoute(async (req, res) => {
   const sessions = listSessions(), bundles = listBundles({ summaries: true });
   const assignments = store.assignmentMap('uploads');
   const uploads = sessions.map(s => uploadSummary(s, assignments));
   const warnings = [];
-  let accounts = null, practices = null, signups = [];
+  const days = [7,14,30,90].includes(Number(req.query.days)) ? Number(req.query.days) : 14;
+  let accounts = null, practices = null, signups = [], practiceRows = null;
   try {
     const client = cloud();
     const results = await Promise.all([
-      client.auth.admin.listUsers({ page: 1, perPage: 1 }),
-      client.from('practice_sessions').select('id', { count: 'exact', head: true }),
-      client.from('users').select('created_at').gte('created_at', new Date(Date.now() - 14 * 86400000).toISOString()).order('created_at').limit(10000),
+      allAccounts(client),
+      client.from('exam_sessions').select('id', { count: 'exact', head: true }),
     ]);
-    if (results[0].error) throw results[0].error;
-    accounts = results[0].data.total;
-    if (results[1].error) warnings.push('Practice totals unavailable. Check the student-data schema.');
+    signups = results[0]; accounts = signups.length;
+    if (results[1].error || results[1].count === null) warnings.push('Completed session totals unavailable. Check the saved exam history.');
     else practices = results[1].count;
-    if (results[2].error) warnings.push('Signup chart unavailable. Check the users table.');
-    else signups = results[2].data;
+    const start = new Date(Date.parse(new Date().toISOString().slice(0,10)) - (days - 1) * 86400000).toISOString();
+    practiceRows = [];
+    for (let offset = 0; ; offset += 1000) {
+      const result = await client.from('exam_sessions').select('id,created_at').gte('created_at',start).order('id').range(offset,offset+999);
+      if (result.error) { practiceRows = null; warnings.push('Completed session chart unavailable. Check the saved exam history.'); break; }
+      practiceRows.push(...result.data.map(row=>({...row,started_at:row.created_at}))); if (result.data.length < 1000) break;
+    }
   } catch (error) { warnings.push(error.message); }
-  const trend = Array.from({ length: 14 }, (_, index) => {
-    const day = new Date(Date.now() - (13 - index) * 86400000).toISOString().slice(0, 10);
-    return { day, uploads: sessions.filter(s => new Date(s.createdAt).toISOString().startsWith(day)).length, signups: signups.filter(s => s.created_at.startsWith(day)).length };
-  });
+  const trend = buildTrend(signups, sessions, practiceRows, days);
   res.json({ accounts, practices, uploads: sessions.length, bundles: bundles.length,
     questions: bundles.reduce((sum, bundle) => sum + bundleSummary(bundle).questionCount, 0),
     attention: uploads.filter(s => s.attention).length, categories: store.categories().length,
-    recentUploads: uploads.slice(0, 5), trend, warnings, updatedAt: new Date().toISOString() });
+    recentUploads: uploads.slice(0, 5), trend: accounts === null ? trend.map(row=>({...row,signups:null})) : trend,
+    days, timezone:'UTC', sources:{signups:'Supabase Auth accounts',uploads:'VPS uploads',practices:'Supabase saved exam history (exam_sessions)'}, warnings, updatedAt: new Date().toISOString() });
 }));
 router.get('/uploads', (req, res) => { const assignments = store.assignmentMap('uploads'); res.json(filteredPage(req, listSessions().map(s => uploadSummary(s, assignments)))); });
 router.get('/uploads/:id', asyncRoute(async (req, res) => {
@@ -192,19 +199,23 @@ router.post('/assignments',asyncRoute(async(req,res)=>{
   res.json({ok:true,count:moved.length});
 }));
 router.get('/users', asyncRoute(async (req, res) => {
-  const { offset, limit } = paging(req), page = Math.floor(offset / limit) + 1;
-  // Auth includes unconfirmed signups, unlike the public profile table.
-  const { data, error } = await cloud().auth.admin.listUsers({ page, perPage: limit }); if (error) throw error;
-  res.json({ items: data.users.map(u => ({ id: u.id, email: u.email, name: u.user_metadata?.full_name, created_at: u.created_at,
-    last_sign_in_at: u.last_sign_in_at, email_confirmed_at: u.email_confirmed_at, banned_until: u.banned_until, providers: u.app_metadata?.providers })), total: data.total, offset, limit });
+  const { offset, limit } = paging(req), filters = validateFilters(req.query);
+  const users = await directory(cloud()), filtered = users.filter(user=>matchesStudent(user,filters)).sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at))||a.id.localeCompare(b.id));
+  res.json({items:filtered.slice(offset,offset+limit),total:filtered.length,offset,limit,
+    schools:[...new Set(users.map(user=>user.school).filter(Boolean))].sort(), exams:[...new Set(users.map(user=>user.exam).filter(Boolean))].sort()});
 }));
 router.get('/users/:id', asyncRoute(async (req, res) => {
   const { data, error } = await cloud().auth.admin.getUserById(validId(req.params.id)); if (error) throw error;
   const { user } = data;
   const profile = await cloud().from('users').select('*').eq('id', user.id).maybeSingle();
+  const preferences = await cloud().from('student_preferences').select('*').eq('user_id',user.id).maybeSingle();
+  const totals = await Promise.all(['practice_sessions','question_attempts','exam_sessions','learning_events'].map(async table=>{
+    const {count,error}=await cloud().from(table).select('*',{count:'exact',head:true}).eq('user_id',user.id);
+    return [table,{count:error?null:count,error:error?.message}];
+  }));
   // Return account fields needed by admins, never provider identities or auth secrets.
-  res.json({ id: user.id, email: user.email, name: user.user_metadata?.full_name, created_at: user.created_at, last_sign_in_at: user.last_sign_in_at,
-    email_confirmed_at: user.email_confirmed_at, banned_until: user.banned_until, profile: profile.data, profileError: profile.error?.message });
+  res.json({...accountView(user,profile.data),profileError:profile.error?.message,preferences:preferences.data,preferencesError:preferences.error?.message,
+    learningTotals:Object.fromEntries(totals),notifications:notifications.inbox(user.id,0,10),pushReachable:notifications.reachable(user.id)});
 }));
 router.patch('/users/:id', asyncRoute(async (req, res) => {
   const id = validId(req.params.id), { full_name, banned } = req.body || {};
@@ -214,6 +225,7 @@ router.patch('/users/:id', asyncRoute(async (req, res) => {
   const changes = { ...(banned !== undefined ? { ban_duration: banned ? '876000h' : 'none' } : {}), ...(full_name !== undefined ? { user_metadata: { full_name: full_name.trim() } } : {}) };
   if (!Object.keys(changes).length) fail('No changes provided.');
   const { error } = await cloud().auth.admin.updateUserById(id, changes); if (error) throw error;
+  clearAccountCache();
   let warning;
   if (full_name !== undefined) { const profile = await cloud().from('users').update({ full_name: full_name.trim() }).eq('id', id); warning = profile.error?.message; }
   store.audit(actor(req), banned === true ? 'Suspended account' : banned === false ? 'Restored account' : 'Updated account', id);
@@ -223,6 +235,7 @@ router.get('/data', (_req, res) => res.json({ tables: Object.keys(DATA_TABLES) }
 router.get('/data/:table', asyncRoute(async (req, res) => {
   const table = req.params.table, column = DATA_TABLES[table]; if (!column) fail('Unknown data table.', 404);
   const { offset, limit } = paging(req);
+  if(table.startsWith('admin_notification_'))return res.json({...notifications.dataPage(table,req.query.userId?validId(String(req.query.userId)):null,offset,limit),offset,limit});
   // Device push credentials stay private even to the general data browser.
   const fields = table === 'push_subscriptions' ? 'id,user_id,platform,created_at,updated_at' : '*';
   let query = cloud().from(table).select(fields, { count: 'exact' }).order(column, { ascending: false }).range(offset, offset + limit - 1);
@@ -231,8 +244,32 @@ router.get('/data/:table', asyncRoute(async (req, res) => {
   res.json({ items: data, total: count, offset, limit });
 }));
 router.get('/activity', (req, res) => { const { offset, limit } = paging(req); res.json(store.listAudit(offset, limit)); });
+const imageUpload=multer({storage:multer.memoryStorage(),limits:{fileSize:5*1024*1024,files:1}});
+router.post('/notifications/images',imageUpload.single('image'),asyncRoute(async(req,res)=>{
+  if(!req.file)fail('Choose a notification image.');
+  const image=await notifications.saveImage(req.file.buffer,actor(req));
+  store.audit(actor(req),'Uploaded notification image',image.id);res.status(201).json(image);
+}));
+router.get('/notifications', (req,res)=>{const {offset,limit}=paging(req);res.json({...notifications.listCampaigns(offset,limit),pushConfigured:Boolean(pushConfiguration())});});
+router.get('/notifications/:id',asyncRoute(async(req,res)=>{
+  const {offset,limit}=paging(req), result=notifications.campaignRecipients(validId(req.params.id),offset,limit);
+  const users=new Map((await directory(cloud())).map(user=>[user.id,user]));
+  res.json({...result,offset,limit,items:result.items.map(row=>({...row,name:users.get(row.user_id)?.name,email:users.get(row.user_id)?.email,school:users.get(row.user_id)?.school,exam:users.get(row.user_id)?.exam}))});
+}));
+router.post('/notifications/preview',asyncRoute(async(req,res)=>{
+  const message=notifications.validateMessage(req.body?.message),selection=req.body?.audience;
+  const users=audience(await directory(cloud(),true),selection);
+  res.status(201).json(notifications.previewCampaign(actor(req),message,selection,users));
+}));
+router.post('/notifications/:id/send',rateLimit({limit:10,keyPrefix:'admin-notifications-send'}),asyncRoute(async(req,res)=>{
+  const result=notifications.queueCampaign(validId(req.params.id),actor(req));
+  store.audit(actor(req),'Sent notification campaign',result.id);
+  res.status(202).json(result);
+}));
 router.get('/system', (_req, res) => res.json({ scheduler: schedulerStats(), storage: 'Hostinger filesystem + SQLite', accountProvider: 'Supabase', serverTime: new Date().toISOString(), uptime: Math.floor(process.uptime()) }));
 router.use((error, _req, res, _next) => {
+  if(error.code==='LIMIT_FILE_SIZE')return res.status(413).json({error:'Choose an image smaller than 5 MB.'});
+  if(error instanceof multer.MulterError)return res.status(400).json({error:'Choose one image using the image upload field.'});
   console.error('[admin]', error.message);
   res.status(error.status || 500).json({ error: error.status ? error.message : 'The admin request failed. Check the API server logs and configuration.' });
 });
