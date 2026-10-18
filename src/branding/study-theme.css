@@ -1,0 +1,94 @@
+/* Shared by every screen, native dialog, and floating exam tool. */
+:root {
+  --study-scheme: dark;
+  --study-bg: #151515; --study-panel: #202020; --study-control: #252525;
+  --study-ink: #eee9e1; --study-soft: #ddd7ce; --study-muted: #aaa49b; --study-faint: #8e887e;
+  --study-accent: #c7927d; --study-accent-hover: #d6a58e; --study-accent-rgb: 199,146,125;
+  --study-button: #c7927d; --study-on-button: #181513; --study-button-shadow: #815e4f;
+  --study-wash-rgb: 255,255,255; --study-line: rgba(238,233,225,.12);
+  --study-done: #e4d4bd; --study-done-rgb: 228,212,189; --study-on-done: #181513; --study-art-ink: #e4d4bd;
+  --study-header: #1a1a1acc; --study-footer: #252322e8; --study-dialog: #252423f5; --study-display: #151515b8;
+  --study-figure: #e8e3da; --study-scrollbar: #575049;
+  --study-nav-shadow: #00000018; --study-fab-shadow: #00000030; --study-shadow: #0007; --study-backdrop: #0008;
+  --study-paper: #202020; --study-paper-dot: #45423f; --study-paper-ink: #e8ded1;
+  --study-exam-header: #181818; --study-exam-rail: #1b1b1b; --study-timer: #111111;
+}
+:root[data-theme="light"] {
+  --study-scheme: light;
+  --study-bg: #faf6f0; --study-panel: #fffcf8; --study-control: #f4ece3;
+  --study-ink: #2e2a27; --study-soft: #514942; --study-muted: #746b62; --study-faint: #82776b;
+  --study-accent: #b14c41; --study-accent-hover: #9b4036; --study-accent-rgb: 177,76,65;
+  --study-button: #e67468; --study-on-button: #2e2a27; --study-button-shadow: #be5b50;
+  --study-wash-rgb: 99,76,54; --study-line: #eadfd3;
+  --study-done: #f5e8e7; --study-done-rgb: 245,232,231; --study-on-done: #704038; --study-art-ink: #8e6751;
+  --study-header: #fffcf8e8; --study-footer: #faf6f0ed; --study-dialog: #fffcf8f5; --study-display: #f4ece3;
+  --study-figure: #fffdf9; --study-scrollbar: #c8b9a8;
+  --study-nav-shadow: #65442a0c; --study-fab-shadow: #b85b4229; --study-shadow: #65442a26; --study-backdrop: #2e2a2759;
+  --study-paper: #fffcf8; --study-paper-dot: #d9caba; --study-paper-ink: #2e2a27;
+  --study-exam-header: #f8f2e9; --study-exam-rail: #faf6f0; --study-timer: #eee5d9;
+}
+:root[data-theme] {
+  --background: var(--study-bg); --foreground: var(--study-ink);
+  --card: var(--study-panel); --card-foreground: var(--study-ink);
+  --popover: var(--study-panel); --popover-foreground: var(--study-ink);
+  --primary: var(--study-button); --primary-foreground: var(--study-on-button);
+  --secondary: var(--study-control); --secondary-foreground: var(--study-soft);
+  --muted: var(--study-control); --muted-foreground: var(--study-muted);
+  --accent: var(--study-control); --accent-foreground: var(--study-ink);
+  --border: var(--study-line); --input-background: var(--study-control);
+  --ring: var(--study-accent);
+}
+html { color-scheme: var(--study-scheme); background: var(--study-bg); }
+body { background: var(--study-bg); }
+
+/* Retain the original cream/coral palette on account and upload screens. */
+:root[data-theme="dark"] .pastq-root :is([class~="bg-white"],[class~="bg-[#FFFFFF]"]) { background-color: var(--study-panel); }
+:root[data-theme="dark"] .pastq-root [class~="bg-[#FAF6F0]"] { background-color: var(--study-bg); }
+:root[data-theme="dark"] .pastq-root [class~="bg-[#F5E8E7]"] { background-color: rgba(var(--study-accent-rgb),.12); }
+:root[data-theme="dark"] .pastq-root :is([class~="text-[#2E2A27]"],[class~="text-[#374151]"]) { color: var(--study-ink); }
+:root[data-theme="dark"] .pastq-root :is([class~="text-[#8C8681]"],[class~="text-[#94A3B8]"]) { color: var(--study-muted); }
+:root[data-theme="dark"] .pastq-root [class~="text-[#E67468]"] { color: var(--study-accent); }
+:root[data-theme="dark"] .pastq-root :is([class~="border-[#EADFD3]"],[class~="border-[#F1F5F9]"]) { border-color: var(--study-line); }
+:root[data-theme="dark"] .pastq-root svg :is([stroke="#E67468"],[fill="#E67468"]) { stroke: var(--study-accent); }
+
+:root[data-theme="light"] :is(.home-feature,.category-tile,.setup-summary,.score-composition,.welcome-art) { background: #fffcf8; }
+:root[data-theme="light"] .category-tile.selected { background: #f5e8e7; }
+:root[data-theme="light"] .study-primary:hover:not(:disabled), :root[data-theme="light"] .study-bottom-nav .nav-upload:hover { background: #ed877b; }
+:root[data-theme="light"] .question-grid button.done { border-color: #dba59e; }
+:root[data-theme="light"] .answer-option.correct-answer { border-color: #dba59e; background: #f5e8e740; }
+:root[data-theme="light"] .study-primary { box-shadow: inset 0 1px #ffffff40, 0 3px 0 var(--study-button-shadow); }
+
+.preferences-screen { display: flex; flex-direction: column; }
+.preferences-header { justify-content: flex-start; gap: 12px; }
+.preferences-header h1 { font-size: 19px; letter-spacing: -.03em; }
+.preferences-content { flex: 1; min-height: 0; overflow-y: auto; padding: 32px max(24px,calc((100vw - 700px)/2)) 50px; }
+.preference-section { margin-bottom: 32px; }
+.preference-section h2 { font-size: 16px; margin-bottom: 8px; letter-spacing: -.025em; }
+.preference-section > p { color: var(--study-muted); font-size: 12px; margin-bottom: 20px; }
+.theme-choices { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 16px; }
+.theme-choice { text-align: left; padding: 10px; border: 1px solid var(--study-line); border-radius: 6px; background: var(--study-panel); color: var(--study-ink); }
+.theme-choice.selected { border-color: var(--study-accent); box-shadow: 0 0 0 1px var(--study-accent); }
+.theme-preview { display: flex; flex-direction: column; height: 122px; padding: 16px 14px; border-radius: 3px; gap: 7px; overflow: hidden; }
+.theme-preview-light { background: #faf6f0; --preview-ink: #2e2a27; --preview-surface: #fffcf8; --preview-line: #eadfd3; --preview-button: #e67468; }
+.theme-preview-dark { background: #151515; --preview-ink: #eee9e1; --preview-surface: #202020; --preview-line: #ffffff20; --preview-button: #c7927d; }
+.theme-preview-system { display: grid; place-items: center; background: var(--study-bg); color: var(--study-soft); }
+.preview-heading { width: 64%; height: 7px; background: var(--preview-ink); opacity: .8; }
+.preview-line { width: 40%; height: 4px; background: var(--preview-ink); opacity: .3; }
+.preview-paper { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px; margin-top: 5px; border: 1px solid var(--preview-line); background: var(--preview-surface); flex: 1; border-radius: 3px; }
+.preview-paper i { height: 3px; width: 72%; background: var(--preview-ink); opacity: .3; }
+.preview-paper i + i { width: 48%; }
+.preview-paper b { background: var(--preview-button); width: 40%; height: 9px; margin-top: 2px; border-radius: 2px; }
+.theme-choice-label { display: flex; align-items: center; justify-content: space-between; padding: 12px 3px 3px; font-size: 13px; }
+.theme-choice-label strong { font-weight: 650; }
+.theme-radio { width: 21px; height: 21px; border: 1px solid rgba(var(--study-wash-rgb),.3); border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.theme-choice.selected .theme-radio, .theme-radio.selected { background: var(--study-accent); border-color: var(--study-accent); color: var(--study-bg); }
+.preference-note { display: block; color: var(--study-muted); font-size: 10px; margin-top: 15px; }
+.preference-options { border-top: 1px solid var(--study-line); margin-top: 16px; }
+.preference-options button { display: flex; align-items: center; justify-content: space-between; width: 100%; min-height: 56px; gap: 16px; padding: 15px 0; border: 0; border-bottom: 1px solid var(--study-line); color: var(--study-ink); background: transparent; text-align: left; font-size: 12px; }
+@media (max-width: 360px) { .theme-choices { gap: 12px; } .theme-preview { padding: 12px 10px; } }
+@media (max-width: 520px) {
+  .theme-choices { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .theme-choice-system { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 12px 16px; }
+  .theme-choice-system .theme-preview { width: 44px; height: 44px; padding: 0; flex-shrink: 0; }
+  .theme-choice-system .theme-choice-label { flex: 1; padding: 0; }
+}

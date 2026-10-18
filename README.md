@@ -1,0 +1,62 @@
+# PastQ Admin
+
+Separate React + Vite admin app for `emmanuel582/adminpastq`, ready to host on Vercel. It uses real Supabase accounts/student data and real VPS uploads/questions. There is no demo mode, sample dataset, or mock API fallback.
+
+## Hosting on Vercel
+
+Import `emmanuel582/adminpastq` with the repository root as the Root Directory. `vercel.json` supplies Vite, `npm ci`, `npm run build`, and `dist`. Production connects to `https://76.13.110.6.nip.io/api` by default. No browser Supabase service key is needed. Subsequent pushes to the connected production branch trigger Vercel deployments.
+
+Only set `VITE_API_URL` if changing the API hostname. Both an origin and a URL ending in `/api` are accepted. Large uploads go directly to the VPS.
+
+## Sign in and live data
+
+Sign in with the existing PastQ administrator email and password. The API verifies the Supabase session and server-side admin allowlist before exposing any admin data. The service-role key stays on the VPS; it is never shipped in this repository or the browser bundle.
+
+The VPS needs its existing `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and unchanged `SESSION_OWNER_HMAC_SECRET`, plus `SUPABASE_SERVICE_ROLE_KEY` and the administrator's Supabase UUID in `ADMIN_USER_IDS`. Add the actual Vercel origin to `FRONTEND_URL` without removing the student app's origins.
+
+Lists, counts, categories, signups, data tables, and activity refresh every **15 seconds** while visible. Returning to the tab or reconnecting refreshes immediately. Open upload/library panels refresh automatically unless an edit is in progress. Existing results stay visible during background refresh, and account tokens refresh automatically.
+
+## Organizing materials
+
+Main groups match the student library: **Schools & Universities**, **Tests & Qualifications**, **Professional Exams**, and **Other Materials**. These are navigation structure, not sample records. Their counts come from actual uploads and published collections.
+
+- Create subcategories inside any group and further nest them as needed.
+- Open Categories to see the group tree beside the actual materials.
+- Drag a material row onto a group or subcategory, then confirm its destination.
+- Use **Move to** beside a row, or select several rows and choose **Move selected**.
+- A parent category includes materials in its subcategories when filtering.
+- Moving a published collection to a main group also updates its organization type in the student catalog. Provide a real school, exam board, or professional-body name where needed. Other collections are preserved.
+- Private uploads remain private when organized; moving them does not publish them.
+- Custom admin-only main categories are supported.
+- Deleting a custom category preserves materials and promotes its children one level. The four main library groups remain available and can be renamed.
+
+Category assignments and action history persist in `DATA_DIR/admin.db`. Include it in consistent SQLite backups.
+
+## Other tools
+
+Overview, upload/PDF ingestion, protected original image viewing with zoom, extraction progress and retries, upload/question edits, published question edits, user profile updates, account suspension/restoration, full student data inspection, CSV export of the current page, and an administrator action log.
+
+Student passwords, provider credentials, and device push tokens are excluded. Data Explorer allows only known student-data tables. Image requests verify admin access and storage paths. Destructive actions require explicit confirmation in the interface.
+
+## Branding
+
+`src/branding/fonts.css` and `study-theme.css` are exact copies of the original website's theme sources. Manrope, Outfit, the lowercase wordmark, Scholar artwork, and light/dark/system behavior match the student website. The admin app builds independently, without a sibling client folder. Surfaces use solid colors with subtle shadows; gradients, colored borders, and sample content are removed.
+
+## Local development
+
+Requires Node 22.13+.
+
+```powershell
+npm ci
+npm run dev
+```
+
+Open `http://127.0.0.1:5174`. To use the live server locally, copy `.env.example` to `.env.local`; otherwise the development proxy uses a local API on port 3000. The live VPS must allow the local origin. Access still requires a real admin login.
+
+```powershell
+npm test
+npm run build
+```
+
+Run the refresh tests and production build before publishing. An optional GitHub Actions template is included at `ci/verify-workflow.example.yml`; enable it in `.github/workflows/` with a credential that has workflow permissions. Backend category/authorization regression tests live in the main PastQ repository at `server/tests/admin.test.js`.
+
