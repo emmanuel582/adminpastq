@@ -1,3 +1,4 @@
+import QuestionReports from './QuestionReports.jsx';
 import { CategoryWorkspace, CategoryEditor, CategoryOptions, MoveDialog, categoryPath } from './Categories.jsx';
 import { startAutoRefresh } from './refresh.js';
 import Login from './Login.jsx';
@@ -8,8 +9,9 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Activity, ArrowDownLeft, ArrowRight, ArrowUpRight, Bell, BookOpen, Boxes, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Database, Download, ExternalLink, FileImage, FileText, Folder, FolderPlus, GraduationCap, Image, LayoutDashboard, Loader2, LogOut, Menu, MoreHorizontal, Pencil, Plus, RefreshCw, Search, Settings2, ShieldCheck, SlidersHorizontal, Trash2, Upload, Users, X, ZoomIn, ZoomOut, AlertCircle } from 'lucide-react';
 import { api, hasSession, setSession, exportRows } from './api.js';
 
-const NAV = [ ['overview','Overview',LayoutDashboard], ['uploads','Uploads',Upload], ['library','Question Library',BookOpen], ['users','Users & Signups',Users], ['notifications','Notifications',Bell], ['categories','Categories',Folder], ['data','Data Explorer',Database] ];
+const NAV = [ ['overview','Overview',LayoutDashboard], ['uploads','Uploads',Upload], ['library','Question Library',BookOpen], ['reports','Question reports',AlertCircle], ['users','Users & Signups',Users], ['notifications','Notifications',Bell], ['categories','Categories',Folder], ['data','Data Explorer',Database] ];
 const META = {
+  reports:['Review student reports','Check source content and publish reviewed corrections.'],
   overview: ['Your platform, at a glance', 'A little clarity. A lot of control. Everything happening across PastQ.'],
   uploads: ['Every upload. All in one place.', 'View original pages, review extracted questions, and keep content organized.'],
   library: ['A better organized library', 'Browse collections, edit questions, and manage their published classification.'],
@@ -80,6 +82,7 @@ export default function App() {
     {page==='overview'&&<Overview resource={overview} days={overviewDays} setDays={setOverviewDays} categories={cats} navigate={navigate} open={setDetail} refresh={refresh}/>}
     {['uploads','library'].includes(page)&&<ContentList key={page} kind={page} version={version} categories={cats} open={setDetail} refresh={refresh} search={search} setSearch={setSearch} newUpload={()=>setUploading(true)}/>}
     {page==='users'&&<UsersPage version={version} open={setDetail} refresh={refresh} messageUsers={messageUsers}/>}
+    {page==='reports'&&<QuestionReports version={version} notify={notify}/>}
     {page==='notifications'&&<Notifications key={notificationPreset.map(user=>user.id).join(',')} version={version} preset={notificationPreset} notify={notify}/>}
     {page==='categories'&&<CategoryWorkspace resource={categories} edit={setCategoryEditor} open={setDetail} renderContent={id=><CategoryContent key={id} id={id} categories={cats} version={version} open={setDetail} refresh={refresh}/>}/>}
     {page==='data'&&<DataPage version={version} open={setDetail} refresh={refresh}/>}
