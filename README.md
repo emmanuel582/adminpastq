@@ -8,7 +8,7 @@ Users & Signups shows the actual saved school/exam, undergraduate choice, onboar
 
 The activity chart reads signup dates from Supabase Auth (including unconfirmed accounts), uploads from the VPS, and completed sessions from the student app's saved Supabase exam history (`exam_sessions`). Device-only and pending offline results appear after synchronization. It refreshes every 15 seconds, supports 7/14/30/90-day ranges, and provides keyboard-accessible day values and a complete data table. Days are UTC; today's totals are partial. Failed data sources are marked unavailable.
 
-Notifications support all accounts, selected accounts, or the intersection of school, exam, student type, account status, onboarding, signup dates, and days since last sign-in. Review freezes the recipient list for 15 minutes. Sending creates an inbox message for each recipient, with optional browser push to enabled, connected devices. Upload JPEG/PNG/WebP images up to 5 MB; the API validates and re-encodes them as WebP. Browser support determines whether a push shows its image. This feature sends in-app and browser notifications; it does not send email or SMS.
+Notifications support all accounts, selected accounts, or the intersection of school, exam, student type, account status, onboarding, signup dates, and days since last sign-in. Review freezes the recipient list for 15 minutes. Sending creates an inbox message for each recipient, with optional phone and browser push to enabled devices. Upload JPEG/PNG/WebP images up to 5 MB; the API validates and re-encodes them as WebP. Android displays campaign artwork in expanded notifications. iPhone image alerts require the release containing the notification-service extension; older releases still show the message and the image in the inbox. This feature sends in-app, phone, and browser notifications; it does not send email or SMS.
 
 Campaigns, recipient snapshots, inbox reads, and device delivery results persist on the VPS. Duplicate send requests do not duplicate inbox messages or restart push delivery. Interrupted push results are reported as unknown rather than automatically sending again. The student frontend provides Preferences → Notifications and updates the existing push worker to display uploaded campaign artwork. No notification is sent merely by previewing it.
 
@@ -72,3 +72,12 @@ npm run build
 
 Run the refresh tests and production build before publishing. An optional GitHub Actions template is included at `ci/verify-workflow.example.yml`; enable it in `.github/workflows/` with a credential that has workflow permissions. Backend category/authorization regression tests live in the main PastQ repository at `server/tests/admin.test.js`.
 
+
+## Send an announcement to everyone
+
+1. Open **Notifications** and choose **All accounts**.
+2. Enter a title and message, choose the page to open, and optionally drop one JPEG, PNG, or WebP image (up to 5 MB) into the image area.
+3. Leave **Send a phone and browser push notification** enabled, then choose **Review recipients**. Review the frozen recipient count and how many accounts have an enabled device.
+4. Choose **Send to … accounts**. Sent notifications shows separate phone and browser results; click the campaign title for recipient details.
+
+Every selected account gets an inbox message. A phone needs the installed PastQ release, a signed-in account, and notification access. Offline phone delivery is retried with a 24-hour message lifetime. A provider acceptance confirms handoff to Apple/Google, not that the student read the alert. Inbox read receipts are shown separately. No campaign is broadcast by uploading an image or reviewing recipients.

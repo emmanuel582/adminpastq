@@ -2,3 +2,5 @@
 @media(max-width:1050px){.notification-layout{grid-template-columns:1fr}.notification-preview-column{grid-template-columns:1fr 1fr}.notification-preview-column>section:only-child{max-width:500px;width:100%}}
 @media(max-width:720px){.condition-grid{grid-template-columns:1fr}.notification-preview-column{grid-template-columns:1fr}.notification-compose .form-stack{padding:20px}.live-chart{padding-inline:16px}.chart-series{gap:12px}.student-conditions{padding-inline:17px}.notification-layout{gap:18px}}
 @media(min-width:1051px){.notification-preview-column{position:sticky;top:24px}}
+
+.notification-image-drop{padding:20px;border:1px dashed var(--study-muted);border-radius:12px;background:var(--study-control);min-height:110px;transition:background-color 140ms ease,border-color 140ms ease}.notification-image-drop.is-dragging{border-color:var(--study-accent);outline:2px solid var(--study-accent);outline-offset:2px}.notification-history td{min-width:110px}
