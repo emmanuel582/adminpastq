@@ -1,3 +1,4 @@
+import { nativeReachable, nativeDeviceCounts, enqueueNative, dispatchNative, nativeCampaignStats, nativeCampaignRecipients } from '../notifications/native.js';
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID, createHash } from 'node:crypto';
 import fs from 'node:fs';
@@ -38,6 +39,12 @@ export async function saveImage(buffer, actor) {
   db().prepare('INSERT INTO images VALUES(?,?,?)').run(id, actor, new Date().toISOString());
   return { id, path: `/api/reminders/images/${id}`, bytes: image.length };
 }
+export async function pushImage(id) {
+ const source=imagePath(id); if(!source) fail('Image not found.',404);
+ const filename=source.replace(/\.webp$/,'.jpg');
+ if(!fs.existsSync(filename)) { const buffer=await sharp(source).flatten({background:'#ffffff'}).jpeg({quality:82}).toBuffer(); fs.writeFileSync(filename,buffer,{mode:0o644}); }
+ return filename;
+}
 export function validateMessage(input) {
   const title = typeof input?.title === 'string' ? input.title.trim() : '', body = typeof input?.body === 'string' ? input.body.trim() : '';
   if (!title || title.length > 100 || !body || body.length > 1000) fail('Enter a title up to 100 characters and a message up to 1000 characters.');
@@ -51,11 +58,25 @@ export function validateMessage(input) {
 }
 export function reachable(userId) {
   const owner = sessionOwnerKey(userId);
-  return Boolean(owner && pushConfiguration() && reminders.readSettings(owner).enabled && reminders.subscriptions(owner).length);
+  return Boolean(owner && (nativeReachable(owner) || (pushConfiguration() && reminders.readSettings(owner).enabled && reminders.subscriptions(owner).length)));
+}
+export function pushReadiness(users) {
+  const phones=nativeDeviceCounts(),browsers=reminders.pushDeviceCounts(),browserConfigured=Boolean(pushConfiguration());
+  const items=users.map(user=>{
+    const owner=sessionOwnerKey(user.id),phoneDevices=owner?phones.get(owner)||0:0,browser=owner?browsers.get(owner):null;
+    const browserDevices=browserConfigured&&browser?.enabled?browser.devices:0;
+    return {userId:user.id,phoneDevices,browserDevices,ready:phoneDevices+browserDevices>0,
+      reason:phoneDevices+browserDevices>0?'ready':browser?.devices&&!browser.enabled?'browser_disabled':'no_device'};
+  });
+  return {items,summary:{accounts:items.length,readyAccounts:items.filter(item=>item.ready).length,
+    phoneAccounts:items.filter(item=>item.phoneDevices>0).length,browserAccounts:items.filter(item=>item.browserDevices>0).length,
+    phoneDevices:items.reduce((n,item)=>n+item.phoneDevices,0),browserDevices:items.reduce((n,item)=>n+item.browserDevices,0),
+    inboxOnly:items.filter(item=>!item.ready).length,browserConfigured,checkedAt:new Date().toISOString()}};
 }
 export function previewCampaign(actor, message, selection, users) {
   const id = randomUUID(), now = Date.now();
-  const pushEligible = message.push ? users.filter(user => reachable(user.id)).length : 0;
+  const readiness=pushReadiness(users),byUser=new Map(readiness.items.map(item=>[item.userId,item]));
+  const pushEligible = message.push ? readiness.summary.readyAccounts : 0;
   db().exec('BEGIN IMMEDIATE');
   try {
     db().prepare("DELETE FROM recipients WHERE campaign_id IN(SELECT id FROM campaigns WHERE status='draft' AND expires_at<?)").run(now);
@@ -65,7 +86,7 @@ export function previewCampaign(actor, message, selection, users) {
     for (const user of users) insert.run(id, user.id);
     db().exec('COMMIT');
   } catch (error) { db().exec('ROLLBACK'); throw error; }
-  return { id, recipients: users.length, pushEligible, inboxOnly: users.length - pushEligible, expiresAt: new Date(now + 15 * 60000).toISOString(), sample: users.slice(0, 10).map(({ id, name, email, school, exam }) => ({ id, name, email, school, exam })), message };
+  return { id, recipients: users.length, pushEligible, inboxOnly: users.length - pushEligible,push:readiness.summary, expiresAt: new Date(now + 15 * 60000).toISOString(), sample: users.slice(0, 10).map(({ id, name, email, school, exam }) => ({ id, name, email, school, exam,push:byUser.get(id) })), message };
 }
 export function queueCampaign(id, actor) {
   const record = db().prepare('SELECT * FROM campaigns WHERE id=? AND actor=?').get(id, actor);
@@ -81,13 +102,15 @@ export function listCampaigns(offset = 0, limit = 20) {
     sum(r.push_sent) AS push_sent,sum(r.push_failed) AS push_failed,
     sum(CASE WHEN r.push_status='interrupted' THEN 1 ELSE 0 END) AS interrupted
     FROM campaigns c LEFT JOIN recipients r ON r.campaign_id=c.id WHERE c.status!='draft' GROUP BY c.id ORDER BY c.created_at DESC LIMIT ? OFFSET ?`).all(limit, offset);
-  return { items: items.map(row => ({ ...row, message: JSON.parse(row.message), audience: JSON.parse(row.audience) })), total: db().prepare("SELECT count(*) AS n FROM campaigns WHERE status!='draft'").get().n };
+  return { items: items.map(row => ({ ...row, message: JSON.parse(row.message), audience: JSON.parse(row.audience), nativePush: nativeCampaignStats(row.id) })), total: db().prepare("SELECT count(*) AS n FROM campaigns WHERE status!='draft'").get().n };
 }
 export function campaignRecipients(id,offset=0,limit=20){
   const campaign=db().prepare("SELECT id,status,message,audience,sent_at FROM campaigns WHERE id=? AND status!='draft'").get(id);
   if(!campaign)fail('Notification not found.',404);
+  const nativeByUser = new Map();
+  for (const row of nativeCampaignRecipients(id)) { const rows=nativeByUser.get(row.user_id)||[]; rows.push({status:row.status,count:row.count}); nativeByUser.set(row.user_id,rows); }
   return {campaign:{...campaign,message:JSON.parse(campaign.message),audience:JSON.parse(campaign.audience)},
-    items:db().prepare('SELECT user_id,read_at,push_status,push_sent,push_failed FROM recipients WHERE campaign_id=? ORDER BY user_id LIMIT ? OFFSET ?').all(id,limit,offset),
+    items:db().prepare('SELECT user_id,read_at,push_status,push_sent,push_failed FROM recipients WHERE campaign_id=? ORDER BY user_id LIMIT ? OFFSET ?').all(id,limit,offset).map(row=>({...row,nativePush:nativeByUser.get(row.user_id)||[]})),
     total:db().prepare('SELECT count(*) AS n FROM recipients WHERE campaign_id=?').get(id).n};
 }
 export function inbox(userId, offset = 0, limit = 20) {
@@ -111,7 +134,7 @@ export function dataPage(table,userId,offset,limit){
   return {items:db().prepare(`SELECT r.*,c.sent_at FROM recipients r JOIN campaigns c ON c.id=r.campaign_id WHERE ${where} ORDER BY c.sent_at DESC,r.user_id LIMIT ? OFFSET ?`).all(...params,limit,offset),
     total:db().prepare(`SELECT count(*) AS n FROM recipients r JOIN campaigns c ON c.id=r.campaign_id WHERE ${where}`).get(...params).n};
 }
-export async function dispatchCampaigns({ send = sendPush, origin = process.env.PUBLIC_API_URL || 'https://76.13.110.6.nip.io' } = {}) {
+export async function dispatchCampaigns({ send = sendPush, dispatchPhone = dispatchNative, origin = process.env.PUBLIC_API_URL || 'https://76.13.110.6.nip.io' } = {}) {
   if (running) return; running = true;
   try {
     const campaigns = db().prepare("SELECT * FROM campaigns WHERE status IN('queued','sending') ORDER BY created_at LIMIT 5").all();
@@ -122,17 +145,19 @@ export async function dispatchCampaigns({ send = sendPush, origin = process.env.
       for (let offset = 0; offset < recipients.length; offset += 5) await Promise.all(recipients.slice(offset, offset + 5).map(async ({ user_id }) => {
         const owner = sessionOwnerKey(user_id);
         if (!message.push || !reachable(user_id)) { db().prepare("UPDATE recipients SET push_status='skipped' WHERE campaign_id=? AND user_id=?").run(campaign.id, user_id); return; }
-        db().prepare("UPDATE recipients SET push_status='sending' WHERE campaign_id=? AND user_id=?").run(campaign.id, user_id);
+        const native = enqueueNative(owner,'campaign:'+campaign.id+':'+owner,{title:message.title,body:message.body,data:{kind:'inbox',campaignId:campaign.id},...(message.imageId ? {image: `${origin.replace(/\/$/, '')}/api/reminders/images/${message.imageId}/push.jpg`} : {})});
+        db().prepare("UPDATE recipients SET push_status='sending' WHERE campaign_id=? AND user_id=?").run(campaign.id,user_id);
         let sent = 0, failed = 0;
-        for (const device of reminders.subscriptions(owner)) {
+        for (const device of (pushConfiguration() && reminders.readSettings(owner).enabled ? reminders.subscriptions(owner) : [])) {
           try { await send(device, { title: message.title, body: message.body, url: '/?inbox=1', tag: `pastq-${campaign.id}`, ...(message.imageId ? { image: `${origin.replace(/\/$/, '')}/api/reminders/images/${message.imageId}` } : {}) },{topic:createHash('sha256').update(campaign.id).digest('base64url').slice(0,32)}); sent++; }
           catch (error) { failed++; if ([404, 410].includes(error.statusCode)) reminders.removeSubscription(owner, device.id); }
         }
-        db().prepare("UPDATE recipients SET push_status=?,push_sent=?,push_failed=? WHERE campaign_id=? AND user_id=?").run(failed ? 'failed' : 'sent', sent, failed, campaign.id, user_id);
+        db().prepare("UPDATE recipients SET push_status=?,push_sent=?,push_failed=? WHERE campaign_id=? AND user_id=?").run(failed ? 'failed' : native.queued ? 'queued' : 'sent', sent, failed, campaign.id, user_id);
       }));
       const pending = db().prepare("SELECT 1 FROM recipients WHERE campaign_id=? AND push_status='pending' LIMIT 1").get(campaign.id);
       if (!pending) db().prepare("UPDATE campaigns SET status='completed' WHERE id=?").run(campaign.id);
     }
+    await dispatchPhone();
   } finally { running = false; }
 }
 export function startCampaignScheduler() {

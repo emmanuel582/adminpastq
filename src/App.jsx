@@ -9,7 +9,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Activity, ArrowDownLeft, ArrowRight, ArrowUpRight, Bell, BookOpen, Boxes, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Database, Download, ExternalLink, FileImage, FileText, Folder, FolderPlus, GraduationCap, Image, LayoutDashboard, Loader2, LogOut, Menu, MoreHorizontal, Pencil, Plus, RefreshCw, Search, Settings2, ShieldCheck, SlidersHorizontal, Trash2, Upload, Users, X, ZoomIn, ZoomOut, AlertCircle } from 'lucide-react';
 import { api, hasSession, setSession, exportRows } from './api.js';
 
-const NAV = [ ['overview','Overview',LayoutDashboard], ['uploads','Uploads',Upload], ['library','Question Library',BookOpen], ['reports','Question reports',AlertCircle], ['users','Users & Signups',Users], ['notifications','Notifications',Bell], ['categories','Categories',Folder], ['data','Data Explorer',Database] ];
+const NAV = [ ['overview','Overview',LayoutDashboard], ['uploads','Uploads',Upload], ['library','Question Library',BookOpen], ['reports','Question reports',AlertCircle], ['users','Users & Signups',Users], ['notifications','Push notifications',Bell], ['categories','Categories',Folder], ['data','Data Explorer',Database] ];
 const META = {
   reports:['Review student reports','Check source content and publish reviewed corrections.'],
   overview: ['Your platform, at a glance', 'A little clarity. A lot of control. Everything happening across PastQ.'],
@@ -18,7 +18,7 @@ const META = {
   users: ['People behind the progress', 'Every account and signup, including students waiting to confirm their email.'],
   categories: ['A place for everything', 'Create a simple, consistent way to organize your admin workspace.'],
   data: ['Explore your platform data', 'Inspect student records, preferences, learning activity, and practice history.'],
-  notifications: ['A message for the right people', 'Send image notifications to individuals, everyone, or students matching your conditions.'],
+  notifications: ['Push notifications & messages', 'Send phone and browser alerts with images to anyone, everyone, or a matching audience.'],
   activity: ['A clear trail of changes', 'See who changed what in the admin dashboard.'],
   system: ['Behind the scenes', 'Check your API connection, processing queue, and storage services.'],
 };

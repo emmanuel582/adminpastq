@@ -201,7 +201,8 @@ router.post('/assignments',asyncRoute(async(req,res)=>{
 router.get('/users', asyncRoute(async (req, res) => {
   const { offset, limit } = paging(req), filters = validateFilters(req.query);
   const users = await directory(cloud()), filtered = users.filter(user=>matchesStudent(user,filters)).sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at))||a.id.localeCompare(b.id));
-  res.json({items:filtered.slice(offset,offset+limit),total:filtered.length,offset,limit,
+  const page=filtered.slice(offset,offset+limit),pushByUser=new Map(notifications.pushReadiness(page).items.map(item=>[item.userId,item]));
+  res.json({items:page.map(user=>({...user,push:pushByUser.get(user.id)})),total:filtered.length,offset,limit,
     schools:[...new Set(users.map(user=>user.school).filter(Boolean))].sort(), exams:[...new Set(users.map(user=>user.exam).filter(Boolean))].sort()});
 }));
 router.get('/users/:id', asyncRoute(async (req, res) => {
@@ -251,6 +252,9 @@ router.post('/notifications/images',imageUpload.single('image'),asyncRoute(async
   store.audit(actor(req),'Uploaded notification image',image.id);res.status(201).json(image);
 }));
 router.get('/notifications', (req,res)=>{const {offset,limit}=paging(req);res.json({...notifications.listCampaigns(offset,limit),pushConfigured:Boolean(pushConfiguration())});});
+router.get('/notifications/push-status',asyncRoute(async(_req,res)=>{
+  res.json(notifications.pushReadiness(await directory(cloud())).summary);
+}));
 router.get('/notifications/:id',asyncRoute(async(req,res)=>{
   const {offset,limit}=paging(req), result=notifications.campaignRecipients(validId(req.params.id),offset,limit);
   const users=new Map((await directory(cloud())).map(user=>[user.id,user]));

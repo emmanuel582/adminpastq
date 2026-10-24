@@ -75,9 +75,11 @@ Run the refresh tests and production build before publishing. An optional GitHub
 
 ## Send an announcement to everyone
 
-1. Open **Notifications** and choose **All accounts**.
+The **Push notifications** page shows live connected phone/browser counts, readiness beside each person, and the phone/browser totals for the reviewed audience. **Choose my account** selects only the signed-in administrator for a test message; compose and review it before sending. Delivery defaults to **Push notification + PastQ inbox**, with an explicit inbox-only alternative. If no devices are connected, review clearly states that only inbox messages will be created. Phone pushes waiting for provider receipts remain marked as sending, even after inbox processing completes.
+
+1. Open **Push notifications** and choose **All accounts**.
 2. Enter a title and message, choose the page to open, and optionally drop one JPEG, PNG, or WebP image (up to 5 MB) into the image area.
-3. Leave **Send a phone and browser push notification** enabled, then choose **Review recipients**. Review the frozen recipient count and how many accounts have an enabled device.
-4. Choose **Send to … accounts**. Sent notifications shows separate phone and browser results; click the campaign title for recipient details.
+3. Keep delivery set to **Push notification + PastQ inbox**, then choose **Review recipients**. Review the frozen recipient count and connected phone/browser totals.
+4. Choose **Send push + inbox to … accounts**. If no push devices are connected, the button clearly offers inbox delivery only. Sent notifications shows separate phone and browser results; click the campaign title for recipient details.
 
 Every selected account gets an inbox message. A phone needs the installed PastQ release, a signed-in account, and notification access. Offline phone delivery is retried with a 24-hour message lifetime. A provider acceptance confirms handoff to Apple/Google, not that the student read the alert. Inbox read receipts are shown separately. No campaign is broadcast by uploading an image or reviewing recipients.
